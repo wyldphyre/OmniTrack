@@ -362,6 +362,16 @@
             gap: 10px;
         }
 
+        @media (max-width: 480px) {
+            .child-book-form-row {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .child-book-form-row .form-group:first-child {
+                grid-column: 1 / -1;
+            }
+        }
+
         .child-book-form-row .form-group {
             margin-bottom: 0;
         }
@@ -580,7 +590,7 @@
                 <div class="form-actions">
                     <button type="button" class="btn btn-secondary" onclick="hideSettingsModal()">Close</button>
                 </div>
-                <div class="version-text">Version 1.0.0</div>
+                <div class="version-text">Version 1.0.1</div>
             </div>
         </div>
     </div>
