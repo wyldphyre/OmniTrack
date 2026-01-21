@@ -630,7 +630,6 @@
                                             </div>
                                             <div class="child-book-actions">
                                                 <button class="btn btn-icon btn-small" onclick="editChildBook('${omnibus.id}', ${index})" title="Edit">✏️</button>
-                                                <button class="btn btn-icon btn-small" onclick="deleteChildBook('${omnibus.id}', ${index})" title="Delete">🗑️</button>
                                             </div>
                                         </div>
                                         <div class="progress-bar child-progress-bar">
@@ -716,6 +715,17 @@
                 </div>
             `;
             list.appendChild(div);
+
+            // Add enter key handler to add another child book
+            div.querySelectorAll('.form-input').forEach(input => {
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addChildBookForm();
+                    }
+                });
+            });
+
             div.querySelector('.child-name').focus();
         }
 
@@ -746,6 +756,9 @@
                     books.push({ name: childName, seriesNumber, startPage });
                 }
             });
+
+            // Sort by series number
+            books.sort((a, b) => a.seriesNumber - b.seriesNumber);
 
             if (id) {
                 // Update existing
