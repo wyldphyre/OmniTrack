@@ -8,6 +8,7 @@
     <meta name="apple-mobile-web-app-title" content="OmniTrack">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#1a1a2e">
+    <link rel="apple-touch-icon" id="app-icon">
     <title>OmniTrack</title>
     <style>
         * {
@@ -1045,7 +1046,54 @@
             hideConfirmModal();
         }
 
+        // Generate app icon dynamically
+        function generateAppIcon() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 180;
+            canvas.height = 180;
+            const ctx = canvas.getContext('2d');
+
+            // Background gradient
+            const gradient = ctx.createLinearGradient(0, 0, 180, 180);
+            gradient.addColorStop(0, '#1a1a2e');
+            gradient.addColorStop(1, '#16213e');
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.roundRect(0, 0, 180, 180, 40);
+            ctx.fill();
+
+            // Book emoji (using text)
+            ctx.font = '60px serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('📚', 90, 65);
+
+            // Progress bar background
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.beginPath();
+            ctx.roundRect(30, 105, 120, 16, 8);
+            ctx.fill();
+
+            // Progress bar fill
+            ctx.fillStyle = '#4CAF50';
+            ctx.beginPath();
+            ctx.roundRect(30, 105, 72, 16, 8);
+            ctx.fill();
+
+            // App name
+            ctx.fillStyle = 'white';
+            ctx.font = '600 22px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('OmniTrack', 90, 150);
+
+            // Set as apple-touch-icon
+            const iconLink = document.getElementById('app-icon');
+            iconLink.href = canvas.toDataURL('image/png');
+        }
+
         // Initialize
+        generateAppIcon();
         loadData();
         render();
     </script>
