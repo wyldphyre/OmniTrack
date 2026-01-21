@@ -13,6 +13,8 @@ An omnibus book is a collected edition containing multiple books from a series, 
 - Automatic calculation of child book progress based on omnibus progress
 - Progress adjustment with +/- buttons (1% increments)
 - Edit and delete omnibus and child books
+- Press Enter when adding child books to quickly add another
+- Export/import data as JSON for backup
 - Data persists to local storage
 - Works offline once loaded
 - iOS home screen support (PWA)
@@ -22,8 +24,16 @@ An omnibus book is a collected edition containing multiple books from a series, 
 1. Open `index.html` in a web browser
 2. Tap the + button to create a new omnibus book
 3. Enter the omnibus name and total page count
-4. Add child books with their names, series numbers, and start pages
+4. Add child books with their names, series numbers, and start pages (press Enter to add more)
 5. Use the +/- buttons to update your reading progress
+
+### Settings
+
+Tap the gear icon in the top right to access settings:
+
+- **Export Data**: Download all your data as a JSON file
+- **Import Data**: Restore data from a previously exported JSON file
+- **Reset All Data**: Clear all omnibus books (requires confirmation)
 
 ### iOS Home Screen Installation
 

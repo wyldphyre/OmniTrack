@@ -22,6 +22,10 @@ OmniTrack/
 └── claude.md     # This file - project context for AI assistants
 ```
 
+## Version
+
+Current version: 1.0.0
+
 ## Data Model
 
 ### OmnibusBook (stored in localStorage)
@@ -71,15 +75,24 @@ OmniTrack/
 - `render()` - renders all omnibus cards to DOM
 - `adjustProgress(id, increment)` - +/- button handler
 - `showCreateModal()` / `editOmnibus(id)` - modal management
-- `addChildBookForm()` - dynamically adds child book input fields
+- `addChildBookForm()` - dynamically adds child book input fields (Enter key adds another)
+- `exportData()` / `importData()` / `handleImport()` - JSON export/import
+- `resetData()` - clears all data (with confirmation)
 
 ## UI Components
 
-- **Main view**: List of omnibus cards with progress bars
+- **Main view**: List of omnibus cards with progress bars, gear icon for settings
 - **Omnibus modal**: Create/edit omnibus with inline child book forms
 - **Child modal**: Edit individual child book
-- **Confirm modal**: Delete confirmation dialog
+- **Confirm modal**: Delete/reset confirmation dialog
+- **Settings modal**: Export, import, and reset data options
 
 ## localStorage
 
 Data stored under key `omnitrack_data` as JSON array of OmnibusBook objects.
+
+## Export Format
+
+Exported JSON filename: `omnitrack-export-YYYY-MM-DDTHH-MM-SS.json`
+
+The export contains the raw `omnibusBooks` array, which can be re-imported to restore data.
