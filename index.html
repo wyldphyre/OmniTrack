@@ -625,7 +625,7 @@
                                             <div>
                                                 <div class="child-book-name">${child.seriesNumber}. ${escapeHtml(child.name)}</div>
                                                 <div class="child-book-meta">
-                                                    Pages ${child.startPage}-${child.endPage} · ${child.pagesRead}/${child.totalPages} read
+                                                    Pages ${child.startPage}-${child.endPage} · ${child.pagesRead}/${child.totalPages} read · ${Math.round(child.percentRead)}%
                                                 </div>
                                             </div>
                                             <div class="child-book-actions">
