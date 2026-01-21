@@ -8,84 +8,78 @@ OmniTrack models omnibus books (collected editions containing multiple books fro
 
 ## Tech Stack
 
-- Single HTML file containing HTML, CSS, and JavaScript
+- Single HTML file (`index.html`) containing HTML, CSS, and JavaScript
 - Local Storage for data persistence
-- Must be Progressive Web App (PWA) compatible for iOS home screen installation
+- PWA compatible for iOS home screen installation
+
+## Project Structure
+
+```
+OmniTrack/
+├── index.html    # Complete app (HTML, CSS, JS)
+├── README.md     # User documentation
+├── LICENSE       # MIT license
+└── claude.md     # This file - project context for AI assistants
+```
 
 ## Data Model
 
-### OmnibusBook
+### OmnibusBook (stored in localStorage)
 
 | Property | Type | Description |
 |----------|------|-------------|
-| Name | string | Descriptive name of the omnibus |
-| PercentCompleted | number | User-entered progress (0-100) |
-| PageCount | number | Total pages in the omnibus |
-| PagesRead | calculated | `PercentCompleted * PageCount / 100` |
+| id | string | Unique identifier |
+| name | string | Descriptive name of the omnibus |
+| percentCompleted | number | User-entered progress (0-100) |
+| pageCount | number | Total pages in the omnibus |
+| books | array | Array of ChildBook objects |
 
 ### ChildBook
 
 | Property | Type | Description |
 |----------|------|-------------|
-| Name | string | Name of the child book |
-| SeriesNumber | number | Position in the series (used for sorting) |
-| StartPage | number | First page of this book in the omnibus |
-| EndPage | calculated | See calculation below |
-| TotalPages | calculated | `EndPage - StartPage + 1` |
-| PercentOfBook | calculated | `TotalPages / OmnibusBook.PageCount` |
-| PagesRead | calculated | See calculation below |
-| PercentRead | calculated | See calculation below |
+| name | string | Name of the child book |
+| seriesNumber | number | Position in the series (used for sorting) |
+| startPage | number | First page of this book in the omnibus |
 
-### Calculated Property Formulas
+### Calculated Properties (computed at render time)
 
-**ChildBook.EndPage:**
-- If last child in omnibus: `OmnibusBook.PageCount`
-- Otherwise: `NextChildBook.StartPage - 1`
+**OmnibusBook.pagesRead:** `percentCompleted * pageCount / 100`
 
-**ChildBook.PagesRead:**
-- If `OmnibusBook.PagesRead >= ChildBook.EndPage`: `ChildBook.TotalPages` (book completed)
-- Else if `OmnibusBook.PagesRead < ChildBook.StartPage`: `0` (book not started)
-- Else: `OmnibusBook.PagesRead - ChildBook.StartPage + 1` (book in progress)
+**ChildBook.endPage:**
+- If last child in omnibus: `OmnibusBook.pageCount`
+- Otherwise: `NextChildBook.startPage - 1`
 
-**ChildBook.PercentRead:**
-- If `ChildBook.PagesRead <= 0`: `0`
-- Else: `ChildBook.PagesRead / ChildBook.TotalPages`
+**ChildBook.totalPages:** `endPage - startPage + 1`
 
-## UI Requirements
+**ChildBook.percentOfBook:** `totalPages / OmnibusBook.pageCount`
 
-### Main View
-- Display all omnibus books as cards
-- Each card shows:
-  - Omnibus name
-  - Progress bar for omnibus completion
-  - Plus/minus buttons to adjust PercentCompleted by 1% increments
-  - List of child books with individual progress bars
+**ChildBook.pagesRead:**
+- If `OmnibusBook.pagesRead >= ChildBook.endPage`: `ChildBook.totalPages` (completed)
+- Else if `OmnibusBook.pagesRead < ChildBook.startPage`: `0` (not started)
+- Else: `OmnibusBook.pagesRead - ChildBook.startPage + 1` (in progress)
 
-### Omnibus Creation
-- Form to enter Name and PageCount
-- Ability to add multiple child books during creation (Name, SeriesNumber, StartPage for each)
-- First child book assumed to start at page 1
+**ChildBook.percentRead:**
+- If `ChildBook.pagesRead <= 0`: `0`
+- Else: `ChildBook.pagesRead / ChildBook.totalPages`
 
-### Child Book Display
-- Sorted by SeriesNumber within each omnibus
-- Show progress bar linked to PercentRead
+## Key Functions
 
-### Editing
-- Edit omnibus books (Name, PageCount, PercentCompleted)
-- Edit child books (Name, SeriesNumber, StartPage)
-- Delete omnibus books
-- Delete child books
+- `loadData()` / `saveData()` - localStorage persistence
+- `calculatePagesRead(omnibus)` - calculates pages read from percent
+- `calculateChildBookProperties(omnibus)` - computes all child book derived values
+- `render()` - renders all omnibus cards to DOM
+- `adjustProgress(id, increment)` - +/- button handler
+- `showCreateModal()` / `editOmnibus(id)` - modal management
+- `addChildBookForm()` - dynamically adds child book input fields
 
-## Behavior
+## UI Components
 
-- When PercentCompleted changes on an omnibus:
-  1. Recalculate OmnibusBook.PagesRead
-  2. Recalculate all child book calculated properties
-- All data persisted to Local Storage
-- Changes saved automatically
+- **Main view**: List of omnibus cards with progress bars
+- **Omnibus modal**: Create/edit omnibus with inline child book forms
+- **Child modal**: Edit individual child book
+- **Confirm modal**: Delete confirmation dialog
 
-## iOS Home Screen Requirements
+## localStorage
 
-- Include appropriate meta tags for web app capability
-- Include viewport meta tag for proper mobile display
-- App should work offline once loaded
+Data stored under key `omnitrack_data` as JSON array of OmnibusBook objects.
