@@ -149,10 +149,41 @@
             padding-top: 15px;
         }
 
+        .child-books-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            margin-bottom: 10px;
+            user-select: none;
+        }
+
+        .child-books-header:hover .child-books-title {
+            color: #ccc;
+        }
+
         .child-books-title {
             font-size: 0.9rem;
             color: #aaa;
-            margin-bottom: 10px;
+        }
+
+        .collapse-icon {
+            font-size: 0.8rem;
+            color: #aaa;
+            transition: transform 0.2s;
+        }
+
+        .collapse-icon.collapsed {
+            transform: rotate(-90deg);
+        }
+
+        .child-books-content {
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .child-books-content.collapsed {
+            max-height: 0 !important;
         }
 
         .child-book {
@@ -590,7 +621,7 @@
                 <div class="form-actions">
                     <button type="button" class="btn btn-secondary" onclick="hideSettingsModal()">Close</button>
                 </div>
-                <div class="version-text">Version 1.0.1</div>
+                <div class="version-text">Version 1.0.2</div>
             </div>
         </div>
     </div>
@@ -598,8 +629,30 @@
     <script>
         // Data storage
         const STORAGE_KEY = 'omnitrack_data';
+        const UI_STATE_KEY = 'omnitrack_ui_state';
         let omnibusBooks = [];
         let deleteCallback = null;
+        let collapsedState = {};
+
+        // Load UI state from localStorage
+        function loadUIState() {
+            const data = localStorage.getItem(UI_STATE_KEY);
+            if (data) {
+                collapsedState = JSON.parse(data);
+            }
+        }
+
+        // Save UI state to localStorage
+        function saveUIState() {
+            localStorage.setItem(UI_STATE_KEY, JSON.stringify(collapsedState));
+        }
+
+        // Toggle collapsed state for an omnibus
+        function toggleCollapse(id) {
+            collapsedState[id] = !collapsedState[id];
+            saveUIState();
+            render();
+        }
 
         // Load data from localStorage
         function loadData() {
@@ -712,7 +765,11 @@
 
                         ${childBooks.length > 0 ? `
                             <div class="child-books">
-                                <div class="child-books-title">Child Books</div>
+                                <div class="child-books-header" onclick="toggleCollapse('${omnibus.id}')">
+                                    <div class="child-books-title">Child Books (${childBooks.length})</div>
+                                    <span class="collapse-icon ${collapsedState[omnibus.id] ? 'collapsed' : ''}">▼</span>
+                                </div>
+                                <div class="child-books-content ${collapsedState[omnibus.id] ? 'collapsed' : ''}" style="max-height: ${childBooks.length * 100}px;">
                                 ${childBooks.map((child, index) => `
                                     <div class="child-book">
                                         <div class="child-book-header">
@@ -731,6 +788,7 @@
                                         </div>
                                     </div>
                                 `).join('')}
+                                </div>
                             </div>
                         ` : ''}
                     </div>
@@ -1105,6 +1163,7 @@
         // Initialize
         generateAppIcon();
         loadData();
+        loadUIState();
         render();
     </script>
 </body>
