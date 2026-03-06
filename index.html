@@ -621,7 +621,7 @@
                 <div class="form-actions">
                     <button type="button" class="btn btn-secondary" onclick="hideSettingsModal()">Close</button>
                 </div>
-                <div class="version-text">Version 1.0.2</div>
+                <div class="version-text">Version 1.0.3</div>
             </div>
         </div>
     </div>
@@ -1161,10 +1161,16 @@
         }
 
         // Initialize
-        generateAppIcon();
+        try { generateAppIcon(); } catch (e) { console.warn('Icon generation failed:', e); }
         loadData();
         loadUIState();
         render();
+
+        // Register service worker for offline/PWA support
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js').catch(e => console.warn('SW registration failed:', e));
+            navigator.serviceWorker.addEventListener('controllerchange', () => window.location.reload());
+        }
     </script>
 </body>
 </html>

@@ -9,6 +9,7 @@ OmniTrack models omnibus books (collected editions containing multiple books fro
 ## Tech Stack
 
 - Single HTML file (`index.html`) containing HTML, CSS, and JavaScript
+- `sw.js` service worker for offline caching and PWA update support
 - Local Storage for data persistence
 - PWA compatible for iOS home screen installation
 
@@ -17,6 +18,7 @@ OmniTrack models omnibus books (collected editions containing multiple books fro
 ```
 OmniTrack/
 ├── index.html    # Complete app (HTML, CSS, JS)
+├── sw.js         # Service worker (offline cache, PWA updates)
 ├── README.md     # User documentation
 ├── LICENSE       # MIT license
 └── claude.md     # This file - project context for AI assistants
@@ -24,7 +26,7 @@ OmniTrack/
 
 ## Version
 
-Current version: 1.0.2
+Current version: 1.0.3
 
 ## Data Model
 

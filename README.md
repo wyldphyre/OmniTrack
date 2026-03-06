@@ -16,8 +16,8 @@ An omnibus book is a collected edition containing multiple books from a series, 
 - Press Enter when adding child books to quickly add another
 - Export/import data as JSON for backup
 - Data persists to local storage
-- Works offline once loaded
-- iOS home screen support (PWA)
+- Works offline via service worker cache
+- iOS home screen support (PWA) with automatic updates
 
 ## Usage
 
