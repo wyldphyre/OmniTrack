@@ -1,4 +1,4 @@
-const CACHE_NAME = 'omnitrack-v1.0.4';
+const CACHE_NAME = 'omnitrack-v1.0.5';
 
 self.addEventListener('install', event => {
     event.waitUntil(

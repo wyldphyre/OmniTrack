@@ -9,11 +9,11 @@ An omnibus book is a collected edition containing multiple books from a series, 
 ## Features
 
 - Track multiple omnibus books
-- Add child books with series number and start page
-- Automatic calculation of child book progress based on omnibus progress
+- Add contained books with series number and start page
+- Automatic calculation of progress for each contained book based on omnibus progress
 - Progress adjustment with +/- buttons (1% increments)
-- Edit and delete omnibus and child books
-- Press Enter when adding child books to quickly add another
+- Edit and delete omnibus books and their contained books
+- Press Enter when adding contained books to quickly add another
 - Export/import data as JSON for backup
 - Data persists to local storage
 - Works offline via service worker cache
@@ -24,7 +24,7 @@ An omnibus book is a collected edition containing multiple books from a series, 
 1. Open `index.html` in a web browser
 2. Tap the + button to create a new omnibus book
 3. Enter the omnibus name and total page count
-4. Add child books with their names, series numbers, and start pages (press Enter to add more)
+4. Add contained books with their names, series numbers, and start pages (press Enter to add more)
 5. Use the +/- buttons to update your reading progress
 
 ### Settings

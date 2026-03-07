@@ -560,7 +560,7 @@
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label">Child Books</label>
+                    <label class="form-label">Contains</label>
                     <div id="child-books-form-list" class="child-books-list"></div>
                     <button type="button" class="add-child-btn" onclick="addChildBookForm()">+ Add Child Book</button>
                 </div>
@@ -626,7 +626,7 @@
                 <div class="form-actions">
                     <button type="button" class="btn btn-secondary" onclick="hideSettingsModal()">Close</button>
                 </div>
-                <div class="version-text">Version 1.0.4</div>
+                <div class="version-text">Version 1.0.5</div>
             </div>
         </div>
     </div>
@@ -771,7 +771,7 @@
                         ${childBooks.length > 0 ? `
                             <div class="child-books">
                                 <div class="child-books-header" onclick="toggleCollapse('${omnibus.id}')">
-                                    <div class="child-books-title">Child Books (${childBooks.length})</div>
+                                    <div class="child-books-title">Contains (${childBooks.length})</div>
                                     <span class="collapse-icon ${collapsedState[omnibus.id] ? 'collapsed' : ''}">▼</span>
                                 </div>
                                 <div class="child-books-content ${collapsedState[omnibus.id] ? 'collapsed' : ''}" style="max-height: ${childBooks.length * 100}px;">
