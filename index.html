@@ -244,13 +244,27 @@
         }
 
         .btn-icon {
-            padding: 6px 10px;
+            padding: 6px 8px;
             background: transparent;
             color: #aaa;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .btn-icon:hover {
             color: #fff;
+        }
+
+        .btn-icon svg {
+            width: 16px;
+            height: 16px;
+            fill: currentColor;
+        }
+
+        .btn-icon.btn-small svg {
+            width: 14px;
+            height: 14px;
         }
 
         .btn-primary {
@@ -626,7 +640,7 @@
                 <div class="form-actions">
                     <button type="button" class="btn btn-secondary" onclick="hideSettingsModal()">Close</button>
                 </div>
-                <div class="version-text">Version 1.0.5</div>
+                <div class="version-text">Version 1.0.6</div>
             </div>
         </div>
     </div>
@@ -750,8 +764,8 @@
                         <div class="omnibus-header">
                             <div class="omnibus-title">${escapeHtml(omnibus.name)}</div>
                             <div class="omnibus-actions">
-                                <button class="btn btn-icon" onclick="editOmnibus('${omnibus.id}')" title="Edit">✏️</button>
-                                <button class="btn btn-icon" onclick="deleteOmnibus('${omnibus.id}')" title="Delete">🗑️</button>
+                                <button class="btn btn-icon" onclick="editOmnibus('${omnibus.id}')" title="Edit"><svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg></button>
+                                <button class="btn btn-icon" onclick="deleteOmnibus('${omnibus.id}')" title="Delete"><svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg></button>
                             </div>
                         </div>
                         <div class="omnibus-meta">${pagesRead} of ${omnibus.pageCount} pages</div>
@@ -785,7 +799,7 @@
                                                 </div>
                                             </div>
                                             <div class="child-book-actions">
-                                                <button class="btn btn-icon btn-small" onclick="editChildBook('${omnibus.id}', ${index})" title="Edit">✏️</button>
+                                                <button class="btn btn-icon btn-small" onclick="editChildBook('${omnibus.id}', ${index})" title="Edit"><svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg></button>
                                             </div>
                                         </div>
                                         <div class="progress-bar child-progress-bar">
