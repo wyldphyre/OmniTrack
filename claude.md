@@ -26,7 +26,7 @@ OmniTrack/
 
 ## Version
 
-Current version: 1.0.6
+Current version: 1.0.7
 
 ## Data Model
 
@@ -78,8 +78,26 @@ Current version: 1.0.6
 - `adjustProgress(id, increment)` - +/- button handler
 - `showCreateModal()` / `editOmnibus(id)` - modal management
 - `addChildBookForm()` - dynamically adds child book input fields (Enter key adds another)
-- `exportData()` / `importData()` / `handleImport()` - JSON export/import
+- `exportData()` / `importData()` / `handleImport()` - JSON export/import of full OmniTrack backup
+- `importOmnibusFile()` / `handleOmnibusImport()` - import a single omnibus from ebook-derived JSON
 - `resetData()` - clears all data (with confirmation)
+
+## Omnibus Import Format
+
+JSON files produced by the companion ebook reader app can be imported via "Import Book" in settings:
+
+```json
+{
+  "omnibus_title": "string",
+  "total_pages": number,
+  "page_count_method": "string (informational, ignored)",
+  "child_books": [
+    { "title": "string", "start_page": number }
+  ]
+}
+```
+
+`seriesNumber` is assigned from array order (1-based). `percentCompleted` defaults to 0.
 
 ## UI Components
 

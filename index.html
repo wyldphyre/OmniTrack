@@ -294,11 +294,69 @@
             background: rgba(255, 255, 255, 0.3);
         }
 
-        /* Add Button */
-        .add-btn {
+        /* FAB Speed Dial */
+        .fab-container {
             position: fixed;
             bottom: 30px;
             right: 30px;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 12px;
+        }
+
+        .fab-menu {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 12px;
+            transition: opacity 0.2s, transform 0.2s;
+        }
+
+        .fab-menu.hidden {
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(10px);
+        }
+
+        .fab-option {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .fab-option-label {
+            background: rgba(30, 30, 50, 0.95);
+            color: #fff;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            white-space: nowrap;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+        }
+
+        .fab-option-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            flex-shrink: 0;
+        }
+
+        .fab-option-btn.new {
+            background: #4CAF50;
+        }
+
+        .fab-option-btn.import {
+            background: #2196F3;
+        }
+
+        .add-btn {
             width: 60px;
             height: 60px;
             border-radius: 50%;
@@ -311,12 +369,18 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: transform 0.2s, box-shadow 0.2s;
+            transition: transform 0.2s, box-shadow 0.2s, background 0.2s;
+            flex-shrink: 0;
         }
 
         .add-btn:hover {
             transform: scale(1.1);
             box-shadow: 0 6px 20px rgba(76, 175, 80, 0.5);
+        }
+
+        .add-btn.open {
+            background: #666;
+            transform: rotate(45deg);
         }
 
         /* Modal Styles */
@@ -552,7 +616,23 @@
         <div id="omnibus-list"></div>
     </div>
 
-    <button class="add-btn" onclick="showCreateModal()">+</button>
+    <div class="fab-container">
+        <div class="fab-menu hidden" id="fab-menu">
+            <div class="fab-option">
+                <span class="fab-option-label">Import Book</span>
+                <button class="fab-option-btn import" onclick="importOmnibusFile()" title="Import Book">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="#fff"><path d="M19 9h-4V3H9v6H5l7 7 7-7zm-8 2V5h2v6h1.17L12 13.17 9.83 11H11zm-6 7h14v2H5v-2z"/></svg>
+                </button>
+            </div>
+            <div class="fab-option">
+                <span class="fab-option-label">New Omnibus</span>
+                <button class="fab-option-btn new" onclick="showCreateModal()" title="New Omnibus">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="#fff"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                </button>
+            </div>
+        </div>
+        <button class="add-btn" id="add-btn" onclick="toggleFabMenu()">+</button>
+    </div>
 
     <!-- Create/Edit Omnibus Modal -->
     <div id="omnibus-modal" class="modal-overlay hidden">
@@ -631,6 +711,7 @@
         <div class="modal">
             <h2 class="modal-title">Settings</h2>
             <div class="settings-content">
+                <input type="file" id="import-omnibus-file" accept=".json" style="display: none;" onchange="handleOmnibusImport(event)">
                 <div class="settings-btn-row">
                     <button type="button" class="btn btn-secondary" onclick="exportData()">Export Data</button>
                     <button type="button" class="btn btn-secondary" onclick="importData()">Import Data</button>
@@ -640,7 +721,7 @@
                 <div class="form-actions">
                     <button type="button" class="btn btn-secondary" onclick="hideSettingsModal()">Close</button>
                 </div>
-                <div class="version-text">Version 1.0.6</div>
+                <div class="version-text">Version 1.0.7</div>
             </div>
         </div>
     </div>
@@ -834,6 +915,7 @@
 
         // Modal functions
         function showCreateModal() {
+            closeFabMenu();
             document.getElementById('modal-title').textContent = 'New Omnibus Book';
             document.getElementById('omnibus-id').value = '';
             document.getElementById('omnibus-name').value = '';
@@ -879,6 +961,59 @@
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
+        }
+
+        function toggleFabMenu() {
+            const menu = document.getElementById('fab-menu');
+            const btn = document.getElementById('add-btn');
+            const isOpen = !menu.classList.contains('hidden');
+            menu.classList.toggle('hidden', isOpen);
+            btn.classList.toggle('open', !isOpen);
+        }
+
+        function closeFabMenu() {
+            document.getElementById('fab-menu').classList.add('hidden');
+            document.getElementById('add-btn').classList.remove('open');
+        }
+
+        function importOmnibusFile() {
+            closeFabMenu();
+            document.getElementById('import-omnibus-file').click();
+        }
+
+        function handleOmnibusImport(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (!data.omnibus_title || !data.total_pages || !Array.isArray(data.child_books)) {
+                        alert('Invalid format. Expected omnibus_title, total_pages, and child_books.');
+                        return;
+                    }
+                    const books = data.child_books.map((book, index) => ({
+                        name: book.title,
+                        seriesNumber: index + 1,
+                        startPage: book.start_page
+                    }));
+                    omnibusBooks.push({
+                        id: generateId(),
+                        name: data.omnibus_title,
+                        pageCount: data.total_pages,
+                        percentCompleted: 0,
+                        books
+                    });
+                    saveData();
+                    render();
+                    hideSettingsModal();
+                } catch (err) {
+                    alert('Failed to parse file: ' + err.message);
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
         }
 
         function importData() {
@@ -1184,6 +1319,13 @@
         loadData();
         loadUIState();
         render();
+
+        // Close FAB menu when tapping outside
+        document.addEventListener('click', (e) => {
+            if (!document.querySelector('.fab-container').contains(e.target)) {
+                closeFabMenu();
+            }
+        });
 
         // Register service worker for offline/PWA support
         if ('serviceWorker' in navigator) {
