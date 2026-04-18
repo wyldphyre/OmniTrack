@@ -9,6 +9,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#000000">
     <link rel="apple-touch-icon" id="app-icon">
+    <link rel="icon" type="image/png" id="favicon">
     <title>OmniTrack</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -739,7 +740,7 @@
             </span>
             <svg class="settings-row-chevron" viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
         </button>
-        <div class="version-text">Version 1.0.8</div>
+        <div class="version-text">Version 1.0.9</div>
     </div>
 
     <script>
@@ -1166,23 +1167,60 @@
         }
 
         function generateAppIcon() {
+            const SIZE = 180;
             const canvas = document.createElement('canvas');
-            canvas.width = 180; canvas.height = 180;
+            canvas.width = SIZE; canvas.height = SIZE;
             const ctx = canvas.getContext('2d');
+
+            // Background (iOS rounds the corners automatically, but rounding here
+            // keeps the favicon/browser tab look consistent with the home screen)
             ctx.fillStyle = '#000';
-            ctx.beginPath(); ctx.roundRect(0, 0, 180, 180, 40); ctx.fill();
-            ctx.font = '60px serif';
-            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            ctx.fillText('📚', 90, 65);
-            ctx.fillStyle = 'rgba(255,255,255,0.12)';
-            ctx.beginPath(); ctx.roundRect(30, 108, 120, 8, 4); ctx.fill();
-            ctx.fillStyle = '#30d158';
-            ctx.beginPath(); ctx.roundRect(30, 108, 72, 8, 4); ctx.fill();
-            ctx.fillStyle = 'white';
-            ctx.font = '600 20px -apple-system, sans-serif';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('OmniTrack', 90, 150);
-            document.getElementById('app-icon').href = canvas.toDataURL('image/png');
+            ctx.beginPath(); ctx.roundRect(0, 0, SIZE, SIZE, 40); ctx.fill();
+
+            const TRACK = 'rgba(255,255,255,0.14)';
+            const FILL = '#30d158';
+
+            // Layout
+            const barX = 26;
+            const barW = SIZE - barX * 2;          // 128px
+            const omniH = 18;
+            const childH = 12;
+            const childGap = 10;
+            const omniGap = 22;
+            const childCount = 4;
+            const totalH = omniH + omniGap + childCount * childH + (childCount - 1) * childGap;
+            const startY = (SIZE - totalH) / 2;
+
+            // Child book progress values (0..1). These also drive the omnibus fill.
+            const children = [1.0, 1.0, 0.62, 0.0];
+            const omniProgress = children.reduce((a, b) => a + b, 0) / children.length;
+
+            const drawBar = (x, y, w, h, progress) => {
+                const r = h / 2;
+                // Track
+                ctx.fillStyle = TRACK;
+                ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.fill();
+                // Fill
+                if (progress > 0) {
+                    const fw = Math.max(h, w * progress); // keep fill at least as wide as height so the rounded cap renders cleanly
+                    ctx.fillStyle = FILL;
+                    ctx.beginPath(); ctx.roundRect(x, y, fw, h, r); ctx.fill();
+                }
+            };
+
+            // Omnibus bar
+            drawBar(barX, startY, barW, omniH, omniProgress);
+
+            // Child bars
+            let y = startY + omniH + omniGap;
+            for (let i = 0; i < childCount; i++) {
+                drawBar(barX, y, barW, childH, children[i]);
+                y += childH + childGap;
+            }
+
+            const dataUrl = canvas.toDataURL('image/png');
+            document.getElementById('app-icon').href = dataUrl;
+            document.getElementById('favicon').href = dataUrl;
         }
 
         function initDraggableSheet(sheetId, hideFunc) {
