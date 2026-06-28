@@ -26,7 +26,7 @@ OmniTrack/
 
 ## Version
 
-Current version: 1.0.9
+Current version: 1.0.10
 
 ## Data Model
 

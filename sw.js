@@ -1,8 +1,13 @@
-const CACHE_NAME = 'omnitrack-v1.0.9';
+const CACHE_NAME = 'omnitrack-v1.0.10';
+const ASSETS = ['./', './index.html', './sw.js'];
 
 self.addEventListener('install', event => {
     event.waitUntil(
-        caches.open(CACHE_NAME).then(cache => cache.add(self.registration.scope))
+        // allSettled so a single failed request (e.g. flaky network) doesn't
+        // abort the whole install; runtime caching backfills anything missed.
+        caches.open(CACHE_NAME).then(cache =>
+            Promise.allSettled(ASSETS.map(asset => cache.add(asset)))
+        )
     );
     self.skipWaiting();
 });

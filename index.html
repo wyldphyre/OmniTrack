@@ -615,7 +615,7 @@
     <div class="bottom-toolbar">
         <button class="toolbar-btn-import" onclick="importOmnibusFile()">
             <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zm-8 2V5h2v6h1.17L12 13.17 9.83 11H11zm-6 7h14v2H5v-2z"/></svg>
-            Import
+            Import Book
         </button>
         <button class="toolbar-btn-new" onclick="showCreateSheet()">
             <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
@@ -740,7 +740,7 @@
             </span>
             <svg class="settings-row-chevron" viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
         </button>
-        <div class="version-text">Version 1.0.9</div>
+        <div class="version-text">Version 1.0.10</div>
     </div>
 
     <script>
@@ -784,12 +784,14 @@
         }
 
         function calculateChildBookProperties(omnibus) {
-            const sortedBooks = [...omnibus.books].sort((a, b) => a.seriesNumber - b.seriesNumber);
+            const sortedBooks = omnibus.books
+                .map((book, originalIndex) => ({ book, originalIndex }))
+                .sort((a, b) => a.book.seriesNumber - b.book.seriesNumber);
             const pagesRead = calculatePagesRead(omnibus);
-            return sortedBooks.map((book, index) => {
+            return sortedBooks.map(({ book, originalIndex }, index) => {
                 const endPage = index === sortedBooks.length - 1
                     ? omnibus.pageCount
-                    : sortedBooks[index + 1].startPage - 1;
+                    : sortedBooks[index + 1].book.startPage - 1;
                 const totalPages = endPage - book.startPage + 1;
                 const percentOfBook = (totalPages / omnibus.pageCount) * 100;
                 let childPagesRead;
@@ -797,8 +799,43 @@
                 else if (pagesRead < book.startPage) childPagesRead = 0;
                 else childPagesRead = pagesRead - book.startPage + 1;
                 const percentRead = childPagesRead <= 0 ? 0 : (childPagesRead / totalPages) * 100;
-                return { ...book, endPage, totalPages, percentOfBook, pagesRead: childPagesRead, percentRead };
+                return { ...book, originalIndex, endPage, totalPages, percentOfBook, pagesRead: childPagesRead, percentRead };
             });
+        }
+
+        // Returns an error message string if the child books' start pages are not
+        // strictly increasing in series order (or exceed the omnibus page count),
+        // otherwise null. Out-of-order pages would yield negative page ranges.
+        function validateChildPages(books, pageCount) {
+            const sorted = [...books].sort((a, b) => a.seriesNumber - b.seriesNumber);
+            let prev = 0;
+            for (const b of sorted) {
+                if (b.startPage > pageCount) {
+                    return `Start page ${b.startPage} for "${b.name}" exceeds the total page count (${pageCount}).`;
+                }
+                if (b.startPage <= prev) {
+                    return `Start pages must increase in series order. "${b.name}" (page ${b.startPage}) does not come after the previous book.`;
+                }
+                prev = b.startPage;
+            }
+            return null;
+        }
+
+        // Validates that imported data is an array of well-formed omnibus objects.
+        function isValidOmnibusArray(data) {
+            return Array.isArray(data) && data.every(o =>
+                o && typeof o === 'object' &&
+                typeof o.name === 'string' &&
+                typeof o.pageCount === 'number' &&
+                typeof o.percentCompleted === 'number' &&
+                Array.isArray(o.books) &&
+                o.books.every(b =>
+                    b && typeof b === 'object' &&
+                    typeof b.name === 'string' &&
+                    typeof b.seriesNumber === 'number' &&
+                    typeof b.startPage === 'number'
+                )
+            );
         }
 
         function render() {
@@ -841,15 +878,15 @@
                                         <svg viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
                                     </span>
                                 </div>
-                                <div class="child-books-content ${chevronClass}" style="max-height: ${childBooks.length * 90}px;">
-                                ${childBooks.map((child, index) => `
+                                <div class="child-books-content ${chevronClass}">
+                                ${childBooks.map(child => `
                                     <div class="child-book">
                                         <div class="child-book-header">
                                             <div>
                                                 <div class="child-book-name">${child.seriesNumber}. ${escapeHtml(child.name)}</div>
                                                 <div class="child-book-meta">Pages ${child.startPage}–${child.endPage} · ${child.pagesRead}/${child.totalPages} read · ${Math.round(child.percentRead)}%</div>
                                             </div>
-                                            <button class="child-book-edit-btn" onclick="editChildBook('${omnibus.id}', ${index})" title="Edit">
+                                            <button class="child-book-edit-btn" onclick="editChildBook('${omnibus.id}', ${child.originalIndex})" title="Edit">
                                                 <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
                                             </button>
                                         </div>
@@ -863,6 +900,11 @@
                         ` : ''}
                     </div>`;
             }).join('');
+            // Size each expanded panel to its actual content so long, wrapping
+            // titles are never clipped by the overflow:hidden container.
+            container.querySelectorAll('.child-books-content').forEach(el => {
+                el.style.maxHeight = el.classList.contains('collapsed') ? '' : el.scrollHeight + 'px';
+            });
         }
 
         function escapeHtml(text) {
@@ -959,36 +1001,58 @@
             document.getElementById('import-omnibus-file').click();
         }
 
-        function handleOmnibusImport(event) {
+        // Reads the chosen file, parses JSON, and hands the result to onData.
+        // Clears the input so re-selecting the same file fires onchange again.
+        function readJsonFile(event, onData) {
             const file = event.target.files[0];
+            event.target.value = '';
             if (!file) return;
             const reader = new FileReader();
             reader.onload = (e) => {
+                let data;
                 try {
-                    const data = JSON.parse(e.target.result);
-                    if (!data.omnibus_title || !data.total_pages || !Array.isArray(data.child_books)) {
-                        alert('Invalid format. Expected omnibus_title, total_pages, and child_books.');
-                        return;
-                    }
-                    omnibusBooks.push({
-                        id: generateId(),
-                        name: data.omnibus_title,
-                        pageCount: data.total_pages,
-                        percentCompleted: 0,
-                        books: data.child_books.map((book, index) => ({
-                            name: book.title,
-                            seriesNumber: index + 1,
-                            startPage: book.start_page
-                        }))
-                    });
-                    saveData();
-                    render();
+                    data = JSON.parse(e.target.result);
                 } catch (err) {
                     alert('Failed to parse file: ' + err.message);
+                    return;
                 }
+                onData(data);
             };
             reader.readAsText(file);
-            event.target.value = '';
+        }
+
+        // Toolbar import: a top-level array is a full backup (export); anything
+        // else is treated as a single ebook-derived omnibus. This makes the
+        // button format-aware so either kind of file imports correctly.
+        function handleOmnibusImport(event) {
+            readJsonFile(event, data => {
+                if (Array.isArray(data)) importFullBackup(data);
+                else importSingleOmnibus(data);
+            });
+        }
+
+        // Appends a single ebook-derived omnibus to the existing data.
+        function importSingleOmnibus(data) {
+            if (!data.omnibus_title || !data.total_pages || !Array.isArray(data.child_books)) {
+                alert('Unrecognized file format.\n\nExpected either a full OmniTrack backup (an export file) or a single book file with omnibus_title, total_pages, and child_books.');
+                return;
+            }
+            const books = data.child_books.map((book, index) => ({
+                name: book.title,
+                seriesNumber: index + 1,
+                startPage: book.start_page
+            }));
+            const pageError = validateChildPages(books, data.total_pages);
+            if (pageError) { alert(pageError); return; }
+            omnibusBooks.push({
+                id: generateId(),
+                name: data.omnibus_title,
+                pageCount: data.total_pages,
+                percentCompleted: 0,
+                books
+            });
+            saveData();
+            render();
         }
 
         function importData() {
@@ -996,26 +1060,34 @@
         }
 
         function handleImport(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                try {
-                    const data = JSON.parse(e.target.result);
-                    if (Array.isArray(data)) {
-                        omnibusBooks = data;
-                        saveData();
-                        render();
-                        hideSettingsSheet();
-                    } else {
-                        alert('Invalid data format. Expected an array of omnibus books.');
-                    }
-                } catch (err) {
-                    alert('Failed to parse JSON file: ' + err.message);
-                }
+            readJsonFile(event, importFullBackup);
+        }
+
+        // Replaces all data with a validated full-backup array, confirming first
+        // if there is existing data to overwrite.
+        function importFullBackup(data) {
+            if (!isValidOmnibusArray(data)) {
+                alert('This looks like a full backup, but its contents are not valid OmniTrack data.');
+                return;
+            }
+            // Regenerate ids so imported data can never inject markup through
+            // the id values interpolated into inline event handlers.
+            const doImport = () => {
+                omnibusBooks = data.map(o => ({ ...o, id: generateId() }));
+                saveData();
+                render();
             };
-            reader.readAsText(file);
-            event.target.value = '';
+            hideSettingsSheet();
+            if (omnibusBooks.length > 0) {
+                document.getElementById('confirm-title').textContent = 'Replace All Data';
+                document.getElementById('confirm-text').textContent =
+                    `This will replace your current ${omnibusBooks.length} omnibus book(s) with ${data.length} from the file. This cannot be undone.`;
+                document.getElementById('confirm-btn').textContent = 'Replace';
+                confirmCallback = doImport;
+                setTimeout(() => showSheet('confirm-overlay', 'confirm-sheet'), 50);
+            } else {
+                doImport();
+            }
         }
 
         function resetData() {
@@ -1082,9 +1154,13 @@
                 const childName = form.querySelector('.child-name').value.trim();
                 const seriesNumber = parseInt(form.querySelector('.child-series').value);
                 const startPage = parseInt(form.querySelector('.child-start').value);
-                if (childName && seriesNumber && startPage) books.push({ name: childName, seriesNumber, startPage });
+                if (childName && !isNaN(seriesNumber) && !isNaN(startPage)) {
+                    books.push({ name: childName, seriesNumber, startPage });
+                }
             });
             books.sort((a, b) => a.seriesNumber - b.seriesNumber);
+            const pageError = validateChildPages(books, pageCount);
+            if (pageError) { alert(pageError); return; }
             if (id) {
                 const omnibus = omnibusBooks.find(o => o.id === id);
                 if (omnibus) {
@@ -1130,17 +1206,13 @@
             showSheet('confirm-overlay', 'confirm-sheet');
         }
 
-        function editChildBook(omnibusId, childIndex) {
+        function editChildBook(omnibusId, bookIndex) {
             const omnibus = omnibusBooks.find(o => o.id === omnibusId);
             if (!omnibus) return;
-            const sortedBooks = [...omnibus.books].sort((a, b) => a.seriesNumber - b.seriesNumber);
-            const child = sortedBooks[childIndex];
+            const child = omnibus.books[bookIndex];
             if (!child) return;
-            const actualIndex = omnibus.books.findIndex(b =>
-                b.name === child.name && b.seriesNumber === child.seriesNumber && b.startPage === child.startPage
-            );
             document.getElementById('child-omnibus-id').value = omnibusId;
-            document.getElementById('child-book-index').value = actualIndex;
+            document.getElementById('child-book-index').value = bookIndex;
             document.getElementById('child-name').value = child.name;
             document.getElementById('child-series').value = child.seriesNumber;
             document.getElementById('child-start').value = child.startPage;
@@ -1153,9 +1225,14 @@
             const childIndex = parseInt(document.getElementById('child-book-index').value);
             const omnibus = omnibusBooks.find(o => o.id === omnibusId);
             if (!omnibus || childIndex < 0 || childIndex >= omnibus.books.length) return;
-            omnibus.books[childIndex].name = document.getElementById('child-name').value.trim();
-            omnibus.books[childIndex].seriesNumber = parseInt(document.getElementById('child-series').value);
-            omnibus.books[childIndex].startPage = parseInt(document.getElementById('child-start').value);
+            const updated = omnibus.books.map((b, i) => i === childIndex ? {
+                name: document.getElementById('child-name').value.trim(),
+                seriesNumber: parseInt(document.getElementById('child-series').value),
+                startPage: parseInt(document.getElementById('child-start').value)
+            } : b);
+            const pageError = validateChildPages(updated, omnibus.pageCount);
+            if (pageError) { alert(pageError); return; }
+            omnibus.books = updated;
             saveData();
             render();
             hideChildSheet();
@@ -1242,10 +1319,10 @@
                 sheet.style.transform = `translateX(-50%) translateY(${dragY}px)`;
             });
 
-            handle.addEventListener('pointerup', () => {
+            const endDrag = (dismiss) => {
                 if (!dragging) return;
                 dragging = false;
-                if (dragY > 80) {
+                if (dismiss) {
                     sheet.style.transition = 'transform 0.3s cubic-bezier(0.32, 0.72, 0, 1)';
                     sheet.style.transform = 'translateX(-50%) translateY(100%)';
                     setTimeout(() => {
@@ -1258,7 +1335,12 @@
                     sheet.style.transform = 'translateX(-50%) translateY(0)';
                     setTimeout(() => { sheet.style.transition = ''; sheet.style.transform = ''; }, 350);
                 }
-            });
+            };
+
+            handle.addEventListener('pointerup', () => endDrag(dragY > 80));
+            // If the gesture is interrupted (e.g. by the system), snap back so the
+            // sheet is never left stuck mid-drag.
+            handle.addEventListener('pointercancel', () => endDrag(false));
         }
 
         // Initialize
