@@ -1,4 +1,4 @@
-const CACHE_NAME = 'omnitrack-v1.0.11';
+const CACHE_NAME = 'omnitrack-v1.0.12';
 const ASSETS = ['./', './index.html', './sw.js'];
 
 self.addEventListener('install', event => {
@@ -29,7 +29,11 @@ self.addEventListener('fetch', event => {
                     caches.open(CACHE_NAME).then(cache => cache.put(event.request, response.clone()));
                 }
                 return response;
-            }).catch(() => cached);
+            }).catch(() =>
+                // Offline and uncached: fall back to the app shell rather than
+                // resolving undefined, which would make respondWith() throw.
+                cached || caches.match('./')
+            );
             return cached || networkFetch;
         })
     );
