@@ -740,7 +740,7 @@
             </span>
             <svg class="settings-row-chevron" viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
         </button>
-        <div class="version-text">Version 1.0.10</div>
+        <div class="version-text">Version 1.0.11</div>
     </div>
 
     <script>
@@ -838,6 +838,14 @@
             );
         }
 
+        // Normalizes an imported omnibus to the app's invariants: clamps
+        // percentCompleted to 0-100 and returns a page-order error (or null)
+        // so full-backup imports enforce the same rules as manual entry.
+        function normalizeImportedOmnibus(o) {
+            o.percentCompleted = Math.max(0, Math.min(100, o.percentCompleted));
+            return validateChildPages(o.books, o.pageCount);
+        }
+
         function render() {
             const container = document.getElementById('omnibus-list');
             if (omnibusBooks.length === 0) {
@@ -900,9 +908,14 @@
                         ` : ''}
                     </div>`;
             }).join('');
-            // Size each expanded panel to its actual content so long, wrapping
-            // titles are never clipped by the overflow:hidden container.
-            container.querySelectorAll('.child-books-content').forEach(el => {
+            sizeChildPanels();
+        }
+
+        // Size each expanded panel to its actual content so long, wrapping titles
+        // are never clipped by the overflow:hidden container. Re-run on resize
+        // because a width change can rewrap titles and change the needed height.
+        function sizeChildPanels() {
+            document.querySelectorAll('.child-books-content').forEach(el => {
                 el.style.maxHeight = el.classList.contains('collapsed') ? '' : el.scrollHeight + 'px';
             });
         }
@@ -1037,6 +1050,15 @@
                 alert('Unrecognized file format.\n\nExpected either a full OmniTrack backup (an export file) or a single book file with omnibus_title, total_pages, and child_books.');
                 return;
             }
+            const validChildren = data.child_books.every(book =>
+                book && typeof book === 'object' &&
+                typeof book.title === 'string' &&
+                typeof book.start_page === 'number'
+            );
+            if (!validChildren) {
+                alert('Invalid book file: each entry in child_books must have a title and a numeric start_page.');
+                return;
+            }
             const books = data.child_books.map((book, index) => ({
                 name: book.title,
                 seriesNumber: index + 1,
@@ -1069,6 +1091,19 @@
             if (!isValidOmnibusArray(data)) {
                 alert('This looks like a full backup, but its contents are not valid OmniTrack data.');
                 return;
+            }
+            if (data.length === 0) {
+                alert('This backup file is empty — nothing to import.');
+                return;
+            }
+            // Enforce the same page-order / range invariants as manual entry so a
+            // hand-edited or corrupt backup can't reintroduce negative page ranges.
+            for (const o of data) {
+                const pageError = normalizeImportedOmnibus(o);
+                if (pageError) {
+                    alert(`Can't import "${o.name}": ${pageError}`);
+                    return;
+                }
             }
             // Regenerate ids so imported data can never inject markup through
             // the id values interpolated into inline event handlers.
@@ -1354,6 +1389,14 @@
         initDraggableSheet('confirm-sheet', hideConfirmSheet);
         initDraggableSheet('actions-sheet', hideActionsSheet);
         initDraggableSheet('settings-sheet', hideSettingsSheet);
+
+        // Re-measure expanded panels when the viewport changes, since a width
+        // change can rewrap long titles and alter the height they need.
+        let resizeTimer;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(sizeChildPanels, 150);
+        });
 
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('./sw.js').catch(e => console.warn('SW registration failed:', e));
