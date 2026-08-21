@@ -1,5 +1,5 @@
-const CACHE_NAME = 'omnitrack-v1.0.12';
-const ASSETS = ['./', './index.html', './sw.js'];
+const CACHE_NAME = 'omnitrack-v1.0.13';
+const ASSETS = ['./', './index.html', './sw.js', './manifest.json', './icon.svg'];
 
 self.addEventListener('install', event => {
     event.waitUntil(
@@ -21,20 +21,40 @@ self.addEventListener('activate', event => {
     self.clients.claim();
 });
 
+// Last resort when the network is gone and nothing usable is cached. Returning
+// a real Response matters: resolving undefined would make respondWith() throw.
+function offlineResponse() {
+    return new Response('Offline, and no cached copy of this page is available.', {
+        status: 503,
+        statusText: 'Offline',
+        headers: { 'Content-Type': 'text/plain' }
+    });
+}
+
 self.addEventListener('fetch', event => {
+    // Only GET requests are cacheable — cache.put() rejects on anything else —
+    // so let the rest go straight to the network untouched.
+    if (event.request.method !== 'GET') return;
     event.respondWith(
         caches.match(event.request).then(cached => {
             const networkFetch = fetch(event.request).then(response => {
                 if (response && response.ok) {
-                    caches.open(CACHE_NAME).then(cache => cache.put(event.request, response.clone()));
+                    const copy = response.clone();
+                    caches.open(CACHE_NAME)
+                        .then(cache => cache.put(event.request, copy))
+                        .catch(e => console.warn('Cache write failed:', e));
                 }
                 return response;
             }).catch(() =>
-                // Offline and uncached: fall back to the app shell rather than
-                // resolving undefined, which would make respondWith() throw.
-                cached || caches.match('./')
+                // Offline and uncached: fall back to the app shell, then to a
+                // plain offline response if even the shell never got cached.
+                cached ||
+                caches.match('./')
+                    .then(shell => shell || caches.match('./index.html'))
+                    .then(shell => shell || offlineResponse())
+                    .catch(() => offlineResponse())
             );
             return cached || networkFetch;
-        })
+        }).catch(() => offlineResponse())
     );
 });

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" width="180" height="180" role="img" aria-label="OmniTrack">
+    <rect width="180" height="180" rx="40" fill="#000000"/>
+    <g fill="#ffffff" fill-opacity="0.14">
+        <rect x="26" y="31" width="128" height="18" rx="9"/>
+        <rect x="26" y="71" width="128" height="12" rx="6"/>
+        <rect x="26" y="93" width="128" height="12" rx="6"/>
+        <rect x="26" y="115" width="128" height="12" rx="6"/>
+        <rect x="26" y="137" width="128" height="12" rx="6"/>
+    </g>
+    <g fill="#30d158">
+        <rect x="26" y="31" width="83.84" height="18" rx="9"/>
+        <rect x="26" y="71" width="128" height="12" rx="6"/>
+        <rect x="26" y="93" width="128" height="12" rx="6"/>
+        <rect x="26" y="115" width="79.36" height="12" rx="6"/>
+    </g>
+</svg>
