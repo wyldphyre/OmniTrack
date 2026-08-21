@@ -17,16 +17,20 @@ OmniTrack models omnibus books (collected editions containing multiple books fro
 
 ```
 OmniTrack/
-├── index.html    # Complete app (HTML, CSS, JS)
-├── sw.js         # Service worker (offline cache, PWA updates)
-├── README.md     # User documentation
-├── LICENSE       # MIT license
-└── claude.md     # This file - project context for AI assistants
+├── index.html      # Complete app (HTML, CSS, JS)
+├── sw.js           # Service worker (offline cache, PWA updates)
+├── manifest.json   # Web app manifest (Android/desktop installability)
+├── icon.svg        # Manifest icon (the runtime canvas icon covers iOS/favicon)
+├── README.md       # User documentation
+├── LICENSE         # MIT license
+└── claude.md       # This file - project context for AI assistants
 ```
+
+`manifest.json` and `icon.svg` must be deployed alongside `index.html` and `sw.js`.
 
 ## Version
 
-Current version: 1.0.12
+Current version: 1.0.13
 
 ## Data Model
 
@@ -50,7 +54,7 @@ Current version: 1.0.12
 
 ### Calculated Properties (computed at render time)
 
-**OmnibusBook.pagesRead:** `percentCompleted * pageCount / 100`
+**OmnibusBook.pagesRead:** `round(percentCompleted * pageCount / 100)`
 
 **ChildBook.endPage:**
 - If last child in omnibus: `OmnibusBook.pageCount`
@@ -66,20 +70,44 @@ Current version: 1.0.12
 - Else: `OmnibusBook.pagesRead - ChildBook.startPage + 1` (in progress)
 
 **ChildBook.percentRead:**
-- If `ChildBook.pagesRead <= 0`: `0`
-- Else: `ChildBook.pagesRead / ChildBook.totalPages`
+- If `ChildBook.pagesRead <= 0` or `ChildBook.totalPages <= 0`: `0`
+- Else: `ChildBook.pagesRead / ChildBook.totalPages`, capped at 100%
+
+All child-book maths is clamped so a malformed record can never produce a
+negative, NaN, or out-of-range value in the UI.
 
 ## Key Functions
 
-- `loadData()` / `saveData()` - localStorage persistence
+- `loadData()` / `saveData()` - localStorage persistence. `loadData()` validates
+  stored records with `isValidOmnibus` and skips (but never erases) malformed
+  ones; `saveData()` returns `false` when storage rejects the write.
+- `commitChange(mutate)` - runs a mutation, persists it, and rolls the in-memory
+  state back if the save failed, so the UI never shows an unsaved change.
+  Returns whether the change stuck. All mutating paths go through it except
+  `adjustProgress`, which rolls back inline to keep its in-place DOM update.
+- `isValidOmnibus(o)` / `isValidOmnibusArray(data)` - shape validation shared by
+  the import and load paths
+- `validateChildPages(books, pageCount)` - enforces unique series numbers and
+  strictly increasing start pages within the page count
 - `calculatePagesRead(omnibus)` - calculates pages read from percent
 - `calculateChildBookProperties(omnibus)` - computes all child book derived values
 - `render()` - renders all omnibus cards to DOM
+- `updateOmnibusCard(omnibus)` / `findCard(id)` - update one card's figures in
+  place. Cards carry `data-id`. Re-rendering via `innerHTML` would insert fresh
+  nodes at their final size, so the progress-bar transition would never run.
+- `toggleCollapse(id)` - toggles classes on the live nodes (same reason) and
+  measures the panel before expanding so max-height animates from 0
 - `adjustProgress(id, increment)` - +/- button handler
-- `showCreateModal()` / `editOmnibus(id)` - modal management
-- `addChildBookForm()` - dynamically adds child book input fields (Enter key adds another)
-- `exportData()` / `importData()` / `handleImport()` - JSON export/import of full OmniTrack backup
-- `importOmnibusFile()` / `handleOmnibusImport()` - import a single omnibus from ebook-derived JSON
+- `showCreateSheet()` / `editOmnibus(id)` - sheet management
+- `addChildBookForm(name, seriesNumber, startPage, focusName)` - dynamically adds
+  child book input fields (Enter key adds another). `focusName` defaults to true
+  but is false when pre-filling the edit sheet, so focus isn't stolen.
+- `exportData()` - JSON export of the full OmniTrack backup
+- `routeImport(data)` - both import buttons route here: an array is treated as a
+  full backup (replaces all data, after confirmation), anything else as a single
+  ebook-derived omnibus (appended)
+- `importData()` / `handleImport()` and `importOmnibusFile()` / `handleOmnibusImport()`
+  - file-picker entry points for the settings row and the toolbar button
 - `resetData()` - clears all data (with confirmation)
 
 ## Omnibus Import Format
@@ -106,6 +134,16 @@ JSON files produced by the companion ebook reader app can be imported via "Impor
 - **Child modal**: Edit individual child book
 - **Confirm modal**: Delete/reset confirmation dialog
 - **Settings modal**: Export, import, and reset data options
+
+## Service Worker Notes
+
+- The page reloads on `controllerchange` only if it was already controlled, so a
+  first visit doesn't load twice. A reload arriving while a sheet is open is
+  deferred until the sheet closes, so it can't discard in-progress input.
+- The fetch handler ignores non-GET requests (`cache.put` rejects on them) and
+  falls back to the app shell, then to a synthesized 503, so `respondWith()` is
+  never handed `undefined`.
+- Bump `CACHE_NAME` in `sw.js` whenever the app version changes.
 
 ## localStorage
 

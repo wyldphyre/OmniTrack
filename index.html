@@ -8,6 +8,7 @@
     <meta name="apple-mobile-web-app-title" content="OmniTrack">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#000000">
+    <link rel="manifest" href="./manifest.json">
     <link rel="apple-touch-icon" id="app-icon">
     <link rel="icon" type="image/png" id="favicon">
     <title>OmniTrack</title>
@@ -740,7 +741,7 @@
             </span>
             <svg class="settings-row-chevron" viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
         </button>
-        <div class="version-text">Version 1.0.12</div>
+        <div class="version-text">Version 1.0.13</div>
     </div>
 
     <script>
@@ -750,12 +751,13 @@
         let confirmCallback = null;
         let collapsedState = {};
         let activeOmnibusId = null;
+        let pendingUpdateReload = false;
 
         function loadUIState() {
             try {
                 const data = localStorage.getItem(UI_STATE_KEY);
                 const parsed = data ? JSON.parse(data) : null;
-                if (parsed && typeof parsed === 'object') collapsedState = parsed;
+                if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) collapsedState = parsed;
             } catch (e) {
                 console.warn('Ignoring corrupt UI state:', e);
                 collapsedState = {};
@@ -771,22 +773,68 @@
         }
 
         function toggleCollapse(id) {
-            collapsedState[id] = !collapsedState[id];
+            const collapsed = !collapsedState[id];
+            collapsedState[id] = collapsed;
             saveUIState();
-            render();
+            const card = findCard(id);
+            if (!card) { render(); return; }
+            const panel = card.querySelector('.child-books-content');
+            const chevron = card.querySelector('.collapse-chevron');
+            if (!panel || !chevron) { render(); return; }
+            chevron.classList.toggle('collapsed', collapsed);
+            if (collapsed) {
+                // Give the panel a concrete height to animate away from, and flush
+                // it to the style system before the class pins max-height to 0.
+                panel.style.maxHeight = panel.scrollHeight + 'px';
+                void panel.offsetHeight;
+                panel.classList.add('collapsed');
+            } else {
+                // Measure while still collapsed — scrollHeight reports content
+                // height regardless of max-height — so the class removal and the
+                // fresh target land together as one 0 -> height change. Removing
+                // the class first would briefly restore a stale (or cleared)
+                // inline value and animate towards the wrong height.
+                const target = panel.scrollHeight;
+                panel.classList.remove('collapsed');
+                panel.style.maxHeight = target + 'px';
+            }
         }
 
         function loadData() {
             // Tolerate corrupt storage so the app still starts (and Settings
             // remains reachable) instead of dying on an unhandled parse error.
+            let parsed = null;
             try {
                 const data = localStorage.getItem(STORAGE_KEY);
-                const parsed = data ? JSON.parse(data) : null;
-                if (Array.isArray(parsed)) omnibusBooks = parsed;
-                else if (data) console.warn('Ignoring corrupt stored data');
+                parsed = data ? JSON.parse(data) : null;
             } catch (e) {
                 console.warn('Ignoring corrupt stored data:', e);
+                return;
             }
+            if (!Array.isArray(parsed)) {
+                if (parsed !== null) console.warn('Ignoring stored data: not an array');
+                return;
+            }
+            // Stored records get the same shape check as imported ones. A
+            // malformed record (an older format, a hand-edited backup, a partial
+            // write) would otherwise throw inside render() and leave the whole
+            // list blank with no explanation. Unreadable records are left out of
+            // memory but not erased from storage, so nothing is destroyed here.
+            omnibusBooks = parsed.filter(isValidOmnibus);
+            omnibusBooks.forEach(o => { o.percentCompleted = clampPercent(o.percentCompleted); });
+            const dropped = parsed.length - omnibusBooks.length;
+            if (dropped > 0) {
+                console.warn(`Ignoring ${dropped} malformed stored omnibus record(s)`);
+                setTimeout(() => alert(
+                    `${dropped} saved omnibus book(s) could not be read and are not shown.\n\n` +
+                    'Your stored data has not been changed yet, but saving any edit will discard them. ' +
+                    'Restore from a backup first if you need them.'), 0);
+            }
+        }
+
+        function clampPercent(value) {
+            const n = Number(value);
+            return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 0;
         }
 
         function saveData() {
@@ -795,7 +843,7 @@
             } catch (e) {
                 // e.g. QuotaExceededError, or Safari private browsing
                 alert('Could not save your changes — storage is full or unavailable.\n\n' + e.message);
-                return;
+                return false;
             }
             // Prune collapse state for omnibuses that no longer exist so the
             // UI-state entry doesn't accumulate stale ids forever.
@@ -805,10 +853,30 @@
                 if (!ids.has(key)) { delete collapsedState[key]; pruned = true; }
             }
             if (pruned) saveUIState();
+            return true;
+        }
+
+        // Runs a mutation and persists it. If persistence fails, the in-memory
+        // state is rolled back so the UI can never show a change that wasn't
+        // actually saved. Returns whether the change stuck.
+        function commitChange(mutate) {
+            const snapshot = JSON.stringify(omnibusBooks);
+            mutate();
+            const saved = saveData();
+            if (!saved) {
+                try {
+                    omnibusBooks = JSON.parse(snapshot);
+                } catch (e) {
+                    omnibusBooks = [];
+                    loadData();
+                }
+            }
+            render();
+            return saved;
         }
 
         function generateId() {
-            return Date.now().toString(36) + Math.random().toString(36).substr(2);
+            return Date.now().toString(36) + Math.random().toString(36).slice(2);
         }
 
         function calculatePagesRead(omnibus) {
@@ -824,24 +892,31 @@
                 const endPage = index === sortedBooks.length - 1
                     ? omnibus.pageCount
                     : sortedBooks[index + 1].book.startPage - 1;
-                const totalPages = endPage - book.startPage + 1;
-                const percentOfBook = (totalPages / omnibus.pageCount) * 100;
+                const totalPages = Math.max(0, endPage - book.startPage + 1);
+                const percentOfBook = omnibus.pageCount > 0 ? (totalPages / omnibus.pageCount) * 100 : 0;
                 let childPagesRead;
                 if (pagesRead >= endPage) childPagesRead = totalPages;
                 else if (pagesRead < book.startPage) childPagesRead = 0;
-                else childPagesRead = pagesRead - book.startPage + 1;
-                const percentRead = childPagesRead <= 0 ? 0 : (childPagesRead / totalPages) * 100;
+                else childPagesRead = Math.min(totalPages, pagesRead - book.startPage + 1);
+                const percentRead = childPagesRead <= 0 || totalPages <= 0
+                    ? 0
+                    : Math.min(100, (childPagesRead / totalPages) * 100);
                 return { ...book, originalIndex, endPage, totalPages, percentOfBook, pagesRead: childPagesRead, percentRead };
             });
         }
 
-        // Returns an error message string if the child books' start pages are not
-        // strictly increasing in series order (or exceed the omnibus page count),
-        // otherwise null. Out-of-order pages would yield negative page ranges.
+        // Returns an error message string if the child books' series numbers are
+        // not unique, or their start pages are not strictly increasing in series
+        // order (or exceed the omnibus page count), otherwise null. Out-of-order
+        // pages would yield negative page ranges.
         function validateChildPages(books, pageCount) {
             const sorted = [...books].sort((a, b) => a.seriesNumber - b.seriesNumber);
             let prev = 0;
+            let prevSeries = null;
             for (const b of sorted) {
+                if (b.seriesNumber === prevSeries) {
+                    return `Two books share series number ${b.seriesNumber} ("${b.name}"). Each book needs its own number.`;
+                }
                 if (b.startPage > pageCount) {
                     return `Start page ${b.startPage} for "${b.name}" exceeds the total page count (${pageCount}).`;
                 }
@@ -849,32 +924,42 @@
                     return `Start pages must increase in series order. "${b.name}" (page ${b.startPage}) does not come after the previous book.`;
                 }
                 prev = b.startPage;
+                prevSeries = b.seriesNumber;
             }
             return null;
         }
 
-        // Validates that imported data is an array of well-formed omnibus objects.
-        function isValidOmnibusArray(data) {
-            return Array.isArray(data) && data.every(o =>
-                o && typeof o === 'object' &&
+        function isPositiveNumber(n) {
+            return typeof n === 'number' && Number.isFinite(n) && n > 0;
+        }
+
+        // Validates one omnibus record's shape. Shared by the import and load
+        // paths so stored data can never be less trusted — or less checked —
+        // than imported data.
+        function isValidOmnibus(o) {
+            return !!o && typeof o === 'object' &&
                 typeof o.name === 'string' &&
-                typeof o.pageCount === 'number' &&
-                typeof o.percentCompleted === 'number' &&
+                isPositiveNumber(o.pageCount) &&
+                typeof o.percentCompleted === 'number' && Number.isFinite(o.percentCompleted) &&
                 Array.isArray(o.books) &&
                 o.books.every(b =>
-                    b && typeof b === 'object' &&
+                    !!b && typeof b === 'object' &&
                     typeof b.name === 'string' &&
-                    typeof b.seriesNumber === 'number' &&
-                    typeof b.startPage === 'number'
-                )
-            );
+                    typeof b.seriesNumber === 'number' && Number.isFinite(b.seriesNumber) &&
+                    isPositiveNumber(b.startPage)
+                );
+        }
+
+        // Validates that imported data is an array of well-formed omnibus objects.
+        function isValidOmnibusArray(data) {
+            return Array.isArray(data) && data.every(isValidOmnibus);
         }
 
         // Normalizes an imported omnibus to the app's invariants: clamps
         // percentCompleted to 0-100 and returns a page-order error (or null)
         // so full-backup imports enforce the same rules as manual entry.
         function normalizeImportedOmnibus(o) {
-            o.percentCompleted = Math.max(0, Math.min(100, o.percentCompleted));
+            o.percentCompleted = clampPercent(o.percentCompleted);
             return validateChildPages(o.books, o.pageCount);
         }
 
@@ -894,16 +979,16 @@
                 const childBooks = calculateChildBookProperties(omnibus);
                 const chevronClass = collapsedState[omnibus.id] ? 'collapsed' : '';
                 return `
-                    <div class="omnibus-card">
+                    <div class="omnibus-card" data-id="${escapeHtml(omnibus.id)}">
                         <div class="omnibus-header">
                             <div class="omnibus-title">${escapeHtml(omnibus.name)}</div>
                             <button class="omnibus-menu-btn" onclick="showActionsSheet('${omnibus.id}')" title="More options">
                                 <svg viewBox="0 0 24 24"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
                             </button>
                         </div>
-                        <div class="omnibus-meta">${pagesRead.toLocaleString()} of ${omnibus.pageCount.toLocaleString()} pages</div>
+                        <div class="omnibus-meta">${omnibusMetaText(omnibus, pagesRead)}</div>
                         <div class="progress-bar">
-                            <div class="progress-fill" style="width: ${omnibus.percentCompleted}%"></div>
+                            <div class="progress-fill" style="width: ${clampPercent(omnibus.percentCompleted)}%"></div>
                         </div>
                         <div class="progress-controls">
                             <button class="progress-btn" onclick="adjustProgress('${omnibus.id}', -1)">−</button>
@@ -924,14 +1009,14 @@
                                         <div class="child-book-header">
                                             <div>
                                                 <div class="child-book-name">${child.seriesNumber}. ${escapeHtml(child.name)}</div>
-                                                <div class="child-book-meta">Pages ${child.startPage}–${child.endPage} · ${child.pagesRead}/${child.totalPages} read · ${Math.round(child.percentRead)}%</div>
+                                                <div class="child-book-meta">${escapeHtml(childMetaText(child))}</div>
                                             </div>
                                             <button class="child-book-edit-btn" onclick="editChildBook('${omnibus.id}', ${child.originalIndex})" title="Edit">
                                                 <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
                                             </button>
                                         </div>
                                         <div class="progress-bar child-progress-bar">
-                                            <div class="progress-fill child" style="width: ${child.percentRead}%"></div>
+                                            <div class="progress-fill child" style="width: ${clampPercent(child.percentRead)}%"></div>
                                         </div>
                                     </div>
                                 `).join('')}
@@ -940,6 +1025,39 @@
                         ` : ''}
                     </div>`;
             }).join('');
+            sizeChildPanels();
+        }
+
+        function omnibusMetaText(omnibus, pagesRead) {
+            return `${pagesRead.toLocaleString()} of ${Number(omnibus.pageCount).toLocaleString()} pages`;
+        }
+
+        function childMetaText(child) {
+            return `Pages ${child.startPage}–${child.endPage} · ${child.pagesRead}/${child.totalPages} read · ${Math.round(child.percentRead)}%`;
+        }
+
+        function findCard(id) {
+            return Array.from(document.querySelectorAll('.omnibus-card')).find(el => el.dataset.id === id) || null;
+        }
+
+        // Updates one card's progress figures in place. Replacing the whole list
+        // with innerHTML would swap in fresh nodes that render at their final
+        // width, so the progress-bar transition would never run.
+        function updateOmnibusCard(omnibus) {
+            const card = findCard(omnibus.id);
+            if (!card) { render(); return; }
+            const pagesRead = calculatePagesRead(omnibus);
+            card.querySelector('.omnibus-meta').textContent = omnibusMetaText(omnibus, pagesRead);
+            card.querySelector('.progress-value').textContent = `${omnibus.percentCompleted}%`;
+            card.querySelector('.progress-fill:not(.child)').style.width = clampPercent(omnibus.percentCompleted) + '%';
+            const children = calculateChildBookProperties(omnibus);
+            card.querySelectorAll('.child-book').forEach((el, i) => {
+                const child = children[i];
+                if (!child) return;
+                el.querySelector('.child-book-meta').textContent = childMetaText(child);
+                el.querySelector('.progress-fill.child').style.width = clampPercent(child.percentRead) + '%';
+            });
+            // A changed label can rewrap and alter the height an expanded panel needs.
             sizeChildPanels();
         }
 
@@ -962,15 +1080,31 @@
 
         function adjustProgress(id, increment) {
             const omnibus = omnibusBooks.find(o => o.id === id);
-            if (omnibus) {
-                omnibus.percentCompleted = Math.max(0, Math.min(100, omnibus.percentCompleted + increment));
-                saveData();
-                render();
-            }
+            if (!omnibus) return;
+            const previous = omnibus.percentCompleted;
+            const next = clampPercent(previous + increment);
+            if (next === previous) return;
+            omnibus.percentCompleted = next;
+            // Roll back rather than leave the screen showing an unsaved value.
+            if (!saveData()) omnibus.percentCompleted = previous;
+            updateOmnibusCard(omnibus);
         }
 
         // Sheet helpers
+        const pendingSheetHides = new Map();
+
+        function cancelPendingHide(sheetId) {
+            const timer = pendingSheetHides.get(sheetId);
+            if (timer === undefined) return;
+            clearTimeout(timer);
+            pendingSheetHides.delete(sheetId);
+            const sheet = document.getElementById(sheetId);
+            sheet.style.transition = '';
+            sheet.style.transform = '';
+        }
+
         function showSheet(overlayId, sheetId) {
+            cancelPendingHide(sheetId);
             document.getElementById(overlayId).classList.add('visible');
             document.getElementById(sheetId).classList.add('visible');
         }
@@ -978,6 +1112,12 @@
         function hideSheet(overlayId, sheetId) {
             document.getElementById(overlayId).classList.remove('visible');
             document.getElementById(sheetId).classList.remove('visible');
+            // A service-worker update that arrived mid-edit waits for the sheet
+            // to close before reloading, so it can't discard what was typed.
+            if (pendingUpdateReload) {
+                pendingUpdateReload = false;
+                window.location.reload();
+            }
         }
 
         // Omnibus sheet
@@ -1065,22 +1205,27 @@
                 }
                 onData(data);
             };
+            reader.onerror = () => alert('Could not read that file. Please try again.');
             reader.readAsText(file);
         }
 
-        // Toolbar import: a top-level array is a full backup (export); anything
-        // else is treated as a single ebook-derived omnibus. This makes the
-        // button format-aware so either kind of file imports correctly.
+        // A top-level array is a full backup (export); anything else is treated
+        // as a single ebook-derived omnibus. Both import buttons route through
+        // this, so either kind of file works from either entry point.
+        function routeImport(data) {
+            if (Array.isArray(data)) importFullBackup(data);
+            else importSingleOmnibus(data);
+        }
+
         function handleOmnibusImport(event) {
-            readJsonFile(event, data => {
-                if (Array.isArray(data)) importFullBackup(data);
-                else importSingleOmnibus(data);
-            });
+            readJsonFile(event, routeImport);
         }
 
         // Appends a single ebook-derived omnibus to the existing data.
         function importSingleOmnibus(data) {
-            if (!data.omnibus_title || !data.total_pages || !Array.isArray(data.child_books)) {
+            if (!data || typeof data !== 'object' ||
+                typeof data.omnibus_title !== 'string' || !data.omnibus_title.trim() ||
+                !isPositiveNumber(data.total_pages) || !Array.isArray(data.child_books)) {
                 alert('Unrecognized file format.\n\nExpected either a full OmniTrack backup (an export file) or a single book file with omnibus_title, total_pages, and child_books.');
                 return;
             }
@@ -1100,15 +1245,13 @@
             }));
             const pageError = validateChildPages(books, data.total_pages);
             if (pageError) { alert(pageError); return; }
-            omnibusBooks.push({
+            commitChange(() => omnibusBooks.push({
                 id: generateId(),
-                name: data.omnibus_title,
+                name: data.omnibus_title.trim(),
                 pageCount: data.total_pages,
                 percentCompleted: 0,
                 books
-            });
-            saveData();
-            render();
+            }));
         }
 
         function importData() {
@@ -1116,14 +1259,14 @@
         }
 
         function handleImport(event) {
-            readJsonFile(event, importFullBackup);
+            readJsonFile(event, routeImport);
         }
 
         // Replaces all data with a validated full-backup array, confirming first
         // if there is existing data to overwrite.
         function importFullBackup(data) {
             if (!isValidOmnibusArray(data)) {
-                alert('This looks like a full backup, but its contents are not valid OmniTrack data.');
+                alert('This file is a list, so it was read as a full OmniTrack backup, but its contents are not valid OmniTrack data.');
                 return;
             }
             if (data.length === 0) {
@@ -1141,11 +1284,9 @@
             }
             // Regenerate ids so imported data can never inject markup through
             // the id values interpolated into inline event handlers.
-            const doImport = () => {
+            const doImport = () => commitChange(() => {
                 omnibusBooks = data.map(o => ({ ...o, id: generateId() }));
-                saveData();
-                render();
-            };
+            });
             hideSettingsSheet();
             if (omnibusBooks.length > 0) {
                 document.getElementById('confirm-title').textContent = 'Replace All Data';
@@ -1164,17 +1305,13 @@
             document.getElementById('confirm-title').textContent = 'Reset All Data';
             document.getElementById('confirm-text').textContent = 'Are you sure you want to delete all omnibus books? This cannot be undone.';
             document.getElementById('confirm-btn').textContent = 'Reset';
-            confirmCallback = () => {
-                omnibusBooks = [];
-                saveData();
-                render();
-            };
+            confirmCallback = () => commitChange(() => { omnibusBooks = []; });
             showSheet('confirm-overlay', 'confirm-sheet');
         }
 
         // Child book form
         let childFormCounter = 0;
-        function addChildBookForm(name = '', seriesNumber = '', startPage = '') {
+        function addChildBookForm(name = '', seriesNumber = '', startPage = '', focusName = true) {
             const list = document.getElementById('child-books-form-list');
             const id = childFormCounter++;
             const div = document.createElement('div');
@@ -1205,7 +1342,7 @@
                     if (e.key === 'Enter') { e.preventDefault(); addChildBookForm(); }
                 });
             });
-            div.querySelector('.child-name').focus();
+            if (focusName) div.querySelector('.child-name').focus();
         }
 
         function removeChildBookForm(id) {
@@ -1218,32 +1355,50 @@
             const name = document.getElementById('omnibus-name').value.trim();
             const pageCount = parseInt(document.getElementById('omnibus-pages').value);
             const percentCompleted = parseInt(document.getElementById('omnibus-percent').value) || 0;
+            if (!name || !isPositiveNumber(pageCount)) {
+                alert('Enter a name and a total page count of at least 1.');
+                return;
+            }
             const books = [];
+            let incomplete = false;
             document.querySelectorAll('#child-books-form-list .child-book-form').forEach(form => {
                 const childName = form.querySelector('.child-name').value.trim();
-                const seriesNumber = parseInt(form.querySelector('.child-series').value);
-                const startPage = parseInt(form.querySelector('.child-start').value);
-                if (childName && !isNaN(seriesNumber) && !isNaN(startPage)) {
-                    books.push({ name: childName, seriesNumber, startPage });
-                }
+                const seriesRaw = form.querySelector('.child-series').value.trim();
+                const startRaw = form.querySelector('.child-start').value.trim();
+                // An untouched row (from a stray "+ Add Book") is fine to ignore;
+                // a partly filled one is a mistake, not something to discard.
+                if (!childName && !seriesRaw && !startRaw) return;
+                const seriesNumber = parseInt(seriesRaw);
+                const startPage = parseInt(startRaw);
+                if (!childName || isNaN(seriesNumber) || isNaN(startPage)) { incomplete = true; return; }
+                books.push({ name: childName, seriesNumber, startPage });
             });
+            if (incomplete) {
+                alert('Every book needs a name, a series number, and a start page.\n\nFill in the missing fields, or remove the book with its ✕ button.');
+                return;
+            }
             books.sort((a, b) => a.seriesNumber - b.seriesNumber);
             const pageError = validateChildPages(books, pageCount);
             if (pageError) { alert(pageError); return; }
+            const percent = clampPercent(percentCompleted);
+            let saved;
             if (id) {
                 const omnibus = omnibusBooks.find(o => o.id === id);
-                if (omnibus) {
+                if (!omnibus) { hideOmnibusSheet(); return; }
+                saved = commitChange(() => {
                     omnibus.name = name;
                     omnibus.pageCount = pageCount;
-                    omnibus.percentCompleted = Math.max(0, Math.min(100, percentCompleted));
+                    omnibus.percentCompleted = percent;
                     omnibus.books = books;
-                }
+                });
             } else {
-                omnibusBooks.push({ id: generateId(), name, pageCount, percentCompleted: Math.max(0, Math.min(100, percentCompleted)), books });
+                saved = commitChange(() => {
+                    omnibusBooks.push({ id: generateId(), name, pageCount, percentCompleted: percent, books });
+                });
             }
-            saveData();
-            render();
-            hideOmnibusSheet();
+            // On a failed save the change has been rolled back, so keep the sheet
+            // open rather than closing it over work that was not kept.
+            if (saved) hideOmnibusSheet();
         }
 
         function editOmnibus(id) {
@@ -1257,7 +1412,7 @@
             const list = document.getElementById('child-books-form-list');
             list.innerHTML = '';
             childFormCounter = 0;
-            omnibus.books.forEach(book => addChildBookForm(book.name, book.seriesNumber, book.startPage));
+            omnibus.books.forEach(book => addChildBookForm(book.name, book.seriesNumber, book.startPage, false));
             showSheet('omnibus-overlay', 'omnibus-sheet');
         }
 
@@ -1267,11 +1422,9 @@
             document.getElementById('confirm-title').textContent = 'Delete Omnibus';
             document.getElementById('confirm-text').textContent = `Delete "${omnibus.name}" and all its books?`;
             document.getElementById('confirm-btn').textContent = 'Delete';
-            confirmCallback = () => {
+            confirmCallback = () => commitChange(() => {
                 omnibusBooks = omnibusBooks.filter(o => o.id !== id);
-                saveData();
-                render();
-            };
+            });
             showSheet('confirm-overlay', 'confirm-sheet');
         }
 
@@ -1301,10 +1454,7 @@
             } : b);
             const pageError = validateChildPages(updated, omnibus.pageCount);
             if (pageError) { alert(pageError); return; }
-            omnibus.books = updated;
-            saveData();
-            render();
-            hideChildSheet();
+            if (commitChange(() => { omnibus.books = updated; })) hideChildSheet();
         }
 
         function confirmAction() {
@@ -1394,11 +1544,12 @@
                 if (dismiss) {
                     sheet.style.transition = 'transform 0.3s cubic-bezier(0.32, 0.72, 0, 1)';
                     sheet.style.transform = 'translateX(-50%) translateY(100%)';
-                    setTimeout(() => {
+                    pendingSheetHides.set(sheetId, setTimeout(() => {
+                        pendingSheetHides.delete(sheetId);
                         sheet.style.transition = '';
                         sheet.style.transform = '';
                         hideFunc();
-                    }, 300);
+                    }, 300));
                 } else {
                     sheet.style.transition = 'transform 0.35s cubic-bezier(0.32, 0.72, 0, 1)';
                     sheet.style.transform = 'translateX(-50%) translateY(0)';
@@ -1433,8 +1584,18 @@
         });
 
         if ('serviceWorker' in navigator) {
+            // Only reload when a new worker takes over a page that was already
+            // controlled. On a first visit the worker claims an uncontrolled
+            // page, and reloading there just makes the app load twice.
+            const wasControlled = !!navigator.serviceWorker.controller;
+            let reloading = false;
             navigator.serviceWorker.register('./sw.js').catch(e => console.warn('SW registration failed:', e));
-            navigator.serviceWorker.addEventListener('controllerchange', () => window.location.reload());
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                if (!wasControlled || reloading) return;
+                if (document.querySelector('.sheet.visible')) { pendingUpdateReload = true; return; }
+                reloading = true;
+                window.location.reload();
+            });
         }
     </script>
 </body>

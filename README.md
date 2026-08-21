@@ -14,14 +14,14 @@ An omnibus book is a collected edition containing multiple books from a series, 
 - Progress adjustment with +/- buttons (1% increments)
 - Edit and delete omnibus books and their contained books
 - Press Enter when adding contained books to quickly add another
-- Export/import data as JSON for backup
+- Export/import data as JSON for backup (either import button accepts a full backup or a single book file)
 - Data persists to local storage
 - Works offline via service worker cache
-- iOS home screen support (PWA) with automatic updates
+- Installable as a PWA: iOS home screen, and Android/desktop via the web app manifest
 
 ## Usage
 
-1. Open `index.html` in a web browser
+1. Open `index.html` in a web browser (serve the folder over HTTP for the service worker and manifest to load)
 2. Tap the + button to create a new omnibus book
 3. Enter the omnibus name and total page count
 4. Add contained books with their names, series numbers, and start pages (press Enter to add more)
@@ -32,7 +32,7 @@ An omnibus book is a collected edition containing multiple books from a series, 
 Tap the gear icon in the top right to access settings:
 
 - **Export Data**: Download all your data as a JSON file
-- **Import Data**: Restore data from a previously exported JSON file
+- **Import Data**: Restore data from a previously exported JSON file, or add a single book file
 - **Reset All Data**: Clear all omnibus books (requires confirmation)
 
 ### iOS Home Screen Installation
@@ -46,6 +46,6 @@ Tap the gear icon in the top right to access settings:
 
 When you update your progress in the omnibus book, OmniTrack automatically calculates:
 
-- **Pages Read**: Percent completed × total pages
+- **Pages Read**: Percent completed × total pages, rounded to the nearest page
 - **Child Book End Page**: Derived from the next child book's start page (or total pages for the last book)
 - **Child Book Progress**: Based on how many omnibus pages you've read relative to each child book's page range
