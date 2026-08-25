@@ -561,6 +561,31 @@
         .settings-row-label svg { width: 18px; height: 18px; fill: currentColor; flex-shrink: 0; }
         .settings-row-danger { color: #ff453a; }
 
+        .settings-toggle {
+            position: relative;
+            width: 44px;
+            height: 26px;
+            border-radius: 13px;
+            background: rgba(255,255,255,0.16);
+            transition: background 0.2s ease;
+            flex-shrink: 0;
+        }
+
+        .settings-toggle.on { background: #30d158; }
+
+        .settings-toggle-knob {
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #fff;
+            transition: transform 0.2s ease;
+        }
+
+        .settings-toggle.on .settings-toggle-knob { transform: translateX(18px); }
+
         .settings-row-chevron {
             width: 14px;
             height: 14px;
@@ -734,6 +759,13 @@
             </span>
             <svg class="settings-row-chevron" viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
         </button>
+        <button class="settings-row" id="sound-row" onclick="toggleSound()" role="switch" aria-checked="true">
+            <span class="settings-row-label">
+                <svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+                Completion Chime
+            </span>
+            <span class="settings-toggle" id="sound-toggle"><span class="settings-toggle-knob"></span></span>
+        </button>
         <button class="settings-row settings-row-danger" onclick="resetData()">
             <span class="settings-row-label">
                 <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
@@ -741,17 +773,20 @@
             </span>
             <svg class="settings-row-chevron" viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
         </button>
-        <div class="version-text">Version 1.0.13</div>
+        <div class="version-text">Version 1.0.14</div>
     </div>
 
     <script>
         const STORAGE_KEY = 'omnitrack_data';
         const UI_STATE_KEY = 'omnitrack_ui_state';
+        const SOUND_KEY = 'omnitrack_sound';
         let omnibusBooks = [];
         let confirmCallback = null;
         let collapsedState = {};
         let activeOmnibusId = null;
         let pendingUpdateReload = false;
+        let soundEnabled = true;
+        let audioCtx = null;
 
         function loadUIState() {
             try {
@@ -770,6 +805,71 @@
             } catch (e) {
                 console.warn('Could not save UI state:', e);
             }
+        }
+
+        function loadSoundSetting() {
+            try {
+                soundEnabled = localStorage.getItem(SOUND_KEY) !== 'off';
+            } catch (e) {
+                soundEnabled = true;
+            }
+        }
+
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            try {
+                localStorage.setItem(SOUND_KEY, soundEnabled ? 'on' : 'off');
+            } catch (e) {
+                console.warn('Could not save sound setting:', e);
+            }
+            renderSoundToggle();
+            // Preview the sound, which also unlocks the audio context on iOS:
+            // it can only start from inside a user gesture, and this tap is one.
+            if (soundEnabled) playCompletionChime();
+        }
+
+        function renderSoundToggle() {
+            document.getElementById('sound-toggle').classList.toggle('on', soundEnabled);
+            document.getElementById('sound-row').setAttribute('aria-checked', String(soundEnabled));
+        }
+
+        // A short two-note chime, synthesized rather than loaded, so there is no
+        // audio file to ship or cache. Audio is a nicety: every failure here is
+        // swallowed so it can never interfere with recording progress.
+        // Note that iOS silences Web Audio when the ring/silent switch is set to
+        // silent, so this is a bonus cue and not a dependable signal.
+        function playCompletionChime() {
+            if (!soundEnabled) return;
+            try {
+                const Ctx = window.AudioContext || window.webkitAudioContext;
+                if (!Ctx) return;
+                audioCtx = audioCtx || new Ctx();
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                const now = audioCtx.currentTime;
+                [[880, 0], [1318.5, 0.12]].forEach(([frequency, offset]) => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.value = frequency;
+                    // Ramp the gain: starting and stopping at full volume clicks.
+                    gain.gain.setValueAtTime(0.0001, now + offset);
+                    gain.gain.exponentialRampToValueAtTime(0.18, now + offset + 0.015);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.22);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(now + offset);
+                    osc.stop(now + offset + 0.25);
+                });
+            } catch (e) {
+                console.warn('Could not play chime:', e);
+            }
+        }
+
+        // How many child books are finished. Compared before and after a progress
+        // change to decide whether one has just been completed.
+        function completedChildCount(omnibus) {
+            if (!omnibus || !Array.isArray(omnibus.books)) return 0;
+            return calculateChildBookProperties(omnibus).filter(c => c.percentRead >= 100).length;
         }
 
         function toggleCollapse(id) {
@@ -1084,10 +1184,16 @@
             const previous = omnibus.percentCompleted;
             const next = clampPercent(previous + increment);
             if (next === previous) return;
+            const completedBefore = completedChildCount(omnibus);
             omnibus.percentCompleted = next;
             // Roll back rather than leave the screen showing an unsaved value.
-            if (!saveData()) omnibus.percentCompleted = previous;
+            const saved = saveData();
+            if (!saved) omnibus.percentCompleted = previous;
             updateOmnibusCard(omnibus);
+            // Only a progress tap chimes, and only for a change that stuck: this
+            // handler runs from the button's click, which is the user gesture iOS
+            // requires before it will play anything.
+            if (saved && completedChildCount(omnibus) > completedBefore) playCompletionChime();
         }
 
         // Sheet helpers
@@ -1567,6 +1673,8 @@
         try { generateAppIcon(); } catch (e) { console.warn('Icon generation failed:', e); }
         loadData();
         loadUIState();
+        loadSoundSetting();
+        renderSoundToggle();
         render();
 
         initDraggableSheet('omnibus-sheet', hideOmnibusSheet);

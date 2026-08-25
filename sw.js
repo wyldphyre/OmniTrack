@@ -1,4 +1,4 @@
-const CACHE_NAME = 'omnitrack-v1.0.13';
+const CACHE_NAME = 'omnitrack-v1.0.14';
 const ASSETS = ['./', './index.html', './sw.js', './manifest.json', './icon.svg'];
 
 self.addEventListener('install', event => {

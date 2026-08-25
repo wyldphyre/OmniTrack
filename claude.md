@@ -30,7 +30,7 @@ OmniTrack/
 
 ## Version
 
-Current version: 1.0.13
+Current version: 1.0.14
 
 ## Data Model
 
@@ -109,6 +109,18 @@ negative, NaN, or out-of-range value in the UI.
 - `importData()` / `handleImport()` and `importOmnibusFile()` / `handleOmnibusImport()`
   - file-picker entry points for the settings row and the toolbar button
 - `resetData()` - clears all data (with confirmation)
+- `playCompletionChime()` - two-note chime synthesized with the Web Audio API
+  (no audio file to ship or cache). Only `adjustProgress` fires it, and only
+  when a child book crosses to 100% on a change that saved: that handler runs
+  from the button's click, which is the user gesture iOS requires before it will
+  play anything. Every audio failure is swallowed so it can never interfere with
+  recording progress. iOS silences Web Audio when the ring/silent switch is set
+  to silent, so the chime is a bonus cue, not a dependable signal.
+- `completedChildCount(omnibus)` - how many child books are finished, compared
+  before and after a progress change to detect a completion
+- `toggleSound()` / `renderSoundToggle()` / `loadSoundSetting()` - the Completion
+  Chime setting. Enabling it plays a preview, which also unlocks the audio
+  context on iOS.
 
 ## Omnibus Import Format
 
@@ -133,7 +145,7 @@ JSON files produced by the companion ebook reader app can be imported via "Impor
 - **Omnibus modal**: Create/edit omnibus with inline child book forms
 - **Child modal**: Edit individual child book
 - **Confirm modal**: Delete/reset confirmation dialog
-- **Settings modal**: Export, import, and reset data options
+- **Settings modal**: Export, import, Completion Chime toggle, and reset data options
 
 ## Service Worker Notes
 
@@ -148,6 +160,8 @@ JSON files produced by the companion ebook reader app can be imported via "Impor
 ## localStorage
 
 Data stored under key `omnitrack_data` as JSON array of OmnibusBook objects.
+Collapse state is stored under `omnitrack_ui_state`, and the Completion Chime
+setting under `omnitrack_sound` (`'on'` / `'off'`, defaulting to on).
 
 ## Export Format
 

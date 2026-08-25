@@ -15,6 +15,7 @@ An omnibus book is a collected edition containing multiple books from a series, 
 - Edit and delete omnibus books and their contained books
 - Press Enter when adding contained books to quickly add another
 - Export/import data as JSON for backup (either import button accepts a full backup or a single book file)
+- Optional chime when a contained book reaches 100% (synthesized, no audio file)
 - Data persists to local storage
 - Works offline via service worker cache
 - Installable as a PWA: iOS home screen, and Android/desktop via the web app manifest
@@ -33,6 +34,7 @@ Tap the gear icon in the top right to access settings:
 
 - **Export Data**: Download all your data as a JSON file
 - **Import Data**: Restore data from a previously exported JSON file, or add a single book file
+- **Completion Chime**: Play a short tone when a contained book reaches 100% (on by default). iOS silences it when the ring/silent switch is set to silent.
 - **Reset All Data**: Clear all omnibus books (requires confirmation)
 
 ### iOS Home Screen Installation
