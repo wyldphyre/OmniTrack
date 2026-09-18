@@ -16,6 +16,8 @@ An omnibus book is a collected edition containing multiple books from a series, 
 - Press Enter when adding contained books to quickly add another
 - Export/import data as JSON for backup (either import button accepts a full backup or a single book file)
 - Optional chime when a contained book reaches 100% (synthesized, no audio file)
+- Share data via the system share sheet (e.g. AirDrop) where the browser supports it
+- Requests persistent storage so the browser doesn't evict your data
 - Data persists to local storage
 - Works offline via service worker cache
 - Installable as a PWA: iOS home screen, and Android/desktop via the web app manifest
@@ -33,6 +35,7 @@ An omnibus book is a collected edition containing multiple books from a series, 
 Tap the gear icon in the top right to access settings:
 
 - **Export Data**: Download all your data as a JSON file
+- **Share Data**: Send the same JSON file through the share sheet (AirDrop, Messages, Save to Files). Only shown where the browser can share files. Chromium browsers (Android, Windows) won't share .json files, so there it's sent as a `.json.txt` file with the same contents. Import it on the other device with Import Data, which accepts either
 - **Import Data**: Restore data from a previously exported JSON file, or add a single book file
 - **Completion Chime**: Play a short tone when a contained book reaches 100% (on by default). iOS silences it when the ring/silent switch is set to silent.
 - **Reset All Data**: Clear all omnibus books (requires confirmation)

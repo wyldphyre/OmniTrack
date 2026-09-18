@@ -30,7 +30,7 @@ OmniTrack/
 
 ## Version
 
-Current version: 1.0.14
+Current version: 1.0.15
 
 ## Data Model
 
@@ -102,7 +102,19 @@ negative, NaN, or out-of-range value in the UI.
 - `addChildBookForm(name, seriesNumber, startPage, focusName)` - dynamically adds
   child book input fields (Enter key adds another). `focusName` defaults to true
   but is false when pre-filling the edit sheet, so focus isn't stolen.
-- `exportData()` - JSON export of the full OmniTrack backup
+- `exportData()` - JSON export of the full OmniTrack backup, built from
+  `exportJson()` and `exportFilename()`
+- `shareData()` / `makeShareableExportFile()` / `canShareExport()` - Share Data
+  sends the same export through the Web Share API. Safari shares a `.json` file;
+  Chromium only shares an allowlist of types that excludes JSON, so it falls back
+  to the same contents as `.json.txt`. Import accepts `.txt` because `routeImport`
+  checks contents, not the file name. The settings row is hidden unless the
+  browser can share one of the two formats; a dismissed share sheet (`AbortError`)
+  is silent.
+- `requestPersistentStorage()` - asks the browser not to evict storage, called
+  from `saveData()` after a successful write. Deferred until the first save so a
+  visitor with no data never sees Firefox's permission prompt; tried once per
+  page load, best effort only.
 - `routeImport(data)` - both import buttons route here: an array is treated as a
   full backup (replaces all data, after confirmation), anything else as a single
   ebook-derived omnibus (appended)
@@ -145,7 +157,7 @@ JSON files produced by the companion ebook reader app can be imported via "Impor
 - **Omnibus modal**: Create/edit omnibus with inline child book forms
 - **Child modal**: Edit individual child book
 - **Confirm modal**: Delete/reset confirmation dialog
-- **Settings modal**: Export, import, Completion Chime toggle, and reset data options
+- **Settings modal**: Export, share, import, Completion Chime toggle, and reset data options
 
 ## Service Worker Notes
 
